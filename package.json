@@ -1,0 +1,39 @@
+{
+  "name": "electron-sync-store",
+  "version": "1.0.0",
+  "description": "Synchronize state between the Main and Preload processes.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./main": {
+      "types": "./dist/main.d.ts",
+      "import": "./dist/main.js",
+      "default": "./dist/main.js"
+    },
+    "./preload": {
+      "types": "./dist/preload.d.ts",
+      "import": "./dist/preload.js",
+      "default": "./dist/preload.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun run build.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5",
+    "electron": "*"
+  }
+}
