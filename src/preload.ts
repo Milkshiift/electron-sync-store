@@ -11,6 +11,7 @@ export class StoreClient<T> {
     private listeners = new Set<Listener<T>>();
     private options: StoreOptions<T>;
     private readyPromise: Promise<T>;
+    private isHydrated = false;
 
     constructor(options: StoreOptions<T>) {
         this.options = options;
@@ -18,6 +19,7 @@ export class StoreClient<T> {
 
         // Listen for server-side changes
         ipcRenderer.on(Channels.ON_CHANGE(options.name), (_: IpcRendererEvent, data: T) => {
+            this.isHydrated = true;
             this.state = data;
             this.notify();
         });
@@ -25,9 +27,13 @@ export class StoreClient<T> {
         // Request initial state immediately
         this.readyPromise = ipcRenderer.invoke(Channels.GET(options.name))
             .then((data) => {
-                this.state = data;
-                this.notify();
-                return data;
+                // If we received an update via ON_CHANGE while waiting, discard this stale initial data
+                if (!this.isHydrated) {
+                    this.state = data;
+                    this.isHydrated = true;
+                    this.notify();
+                }
+                return this.state;
             })
             .catch((err) => {
                 console.error(`[StoreClient] Init failed`, err);
@@ -63,30 +69,26 @@ export class StoreClient<T> {
         }
 
         // Optimistic Mode
-        const previousState = this.state;
-        const optimisticState = deepMerge(clone(previousState), update);
-
-        this.state = optimisticState;
-        this.notify();
-
-        try {
-            await ipcRenderer.invoke(Channels.SET(this.options.name), update);
-        } catch (err) {
-            console.error(`[StoreClient] Sync failed, rolling back.`, err);
-
-            // Rollback only if state matches our optimistic expectation
-            // (Prevents overwriting updates that came from elsewhere in the meantime)
-            if (this.state === optimisticState) {
-                this.state = previousState;
-                this.notify();
-            }
-            throw err;
-        }
+        await this.performOptimisticUpdate(
+            () => deepMerge(this.state, update),
+            () => ipcRenderer.invoke(Channels.SET(this.options.name), update)
+        );
     }
 
     public async setKey<K extends keyof T>(key: K, value: T[K]): Promise<void> {
-        const update = { [key]: value } as unknown as DeepPartial<T>;
-        await this.set(update);
+        if (!this.options.optimistic) {
+            await ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, value);
+            return;
+        }
+
+        await this.performOptimisticUpdate(
+            () => {
+                const s = clone(this.state);
+                s[key] = value;
+                return s;
+            },
+            () => ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, value)
+        );
     }
 
     public async reset(): Promise<void> {
@@ -107,6 +109,29 @@ export class StoreClient<T> {
     private notify() {
         const s = clone(this.state);
         for (const cb of this.listeners) cb(s);
+    }
+
+    private async performOptimisticUpdate(calcState: () => T, action: () => Promise<void>) {
+        const previousState = clone(this.state);
+        const expectedState = calcState();
+
+        this.state = expectedState;
+        this.notify();
+
+        try {
+            await action();
+        } catch (err) {
+            console.error(`[StoreClient] Sync failed, rolling back.`, err);
+
+            // Rollback only if state matches our optimistic expectation.
+            // If it doesn't match, it means an external update happened in the meantime,
+            // and rolling back would overwrite valid data.
+            if (JSON.stringify(this.state) === JSON.stringify(expectedState)) {
+                this.state = previousState;
+                this.notify();
+            }
+            throw err;
+        }
     }
 }
 

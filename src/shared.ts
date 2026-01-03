@@ -19,32 +19,38 @@ export function clone<T>(data: T): T {
 }
 
 /**
+ * Checks if a value is a plain object (not null, not array, not date, etc).
+ */
+export function isPlainObject(item: unknown): item is Record<string, any> {
+    return (
+        item !== null &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        !(item instanceof Date) &&
+        !(item instanceof RegExp)
+    );
+}
+
+/**
  * Deep merges a partial source object into a target object.
  * Handles recursion, Arrays, Dates, and RegExps.
  * Returns a new object reference (immutable).
+ *
+ * NOTE: Arrays are replaced, not merged.
+ * NOTE: `undefined` values in source will delete the corresponding key in target.
  */
-export function deepMerge<T>(target: T, source: unknown): T {
-    if (!isObject(source) || !isObject(target)) {
-        return isObject(source) ? clone(source as any) : (source as T);
+export function deepMerge<T>(target: T, source: any): T {
+    // If source is explicitly undefined, return undefined to signal deletion
+    if (source === undefined) {
+        return undefined as unknown as T;
     }
 
-    if (source instanceof Date) {
-        return new Date(source.getTime()) as any;
-    }
-    if (source instanceof RegExp) {
-        return new RegExp(source) as any;
+    // If either is not a plain object (e.g. Array, Date, null, primitive), source replaces target.
+    if (!isPlainObject(target) || !isPlainObject(source)) {
+        return clone(source);
     }
 
-    if (Array.isArray(source)) {
-        return clone(source) as any;
-    }
-
-    // If target is array/date/regexp but source is object, we overwrite, not merge.
-    if (Array.isArray(target) || target instanceof Date || target instanceof RegExp) {
-        return clone(source as any);
-    }
-
-    const result = { ...target } as any;
+    const output = { ...target } as any;
 
     for (const key of Object.keys(source)) {
         // Prevent prototype pollution
@@ -52,29 +58,16 @@ export function deepMerge<T>(target: T, source: unknown): T {
             continue;
         }
 
-        const targetValue = result[key];
-        const sourceValue = (source as any)[key];
+        const sourceValue = source[key];
+        const targetValue = output[key];
 
-        if (isPlainObject(targetValue) && isPlainObject(sourceValue)) {
-            result[key] = deepMerge(targetValue, sourceValue);
+        if (sourceValue === undefined) {
+            delete output[key];
         } else {
-            result[key] = isObject(sourceValue) ? clone(sourceValue) : sourceValue;
+            // Recursively merge
+            output[key] = deepMerge(targetValue, sourceValue);
         }
     }
 
-    return result;
-}
-
-
-function isObject(item: unknown): item is object {
-    return item !== null && typeof item === "object";
-}
-
-function isPlainObject(item: unknown): boolean {
-    return (
-        isObject(item) &&
-        !Array.isArray(item) &&
-        !(item instanceof Date) &&
-        !(item instanceof RegExp)
-    );
+    return output;
 }

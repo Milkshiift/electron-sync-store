@@ -35,6 +35,7 @@ export type DeepPartial<T> = T extends object ? {
 export const Channels = {
     GET: (name: string) => `store:${name}:get`,
     SET: (name: string) => `store:${name}:set`,
+    SET_KEY: (name: string) => `store:${name}:set-key`,
     RESET: (name: string) => `store:${name}:reset`,
     ON_CHANGE: (name: string) => `store:${name}:changed`,
 };

@@ -17,8 +17,8 @@ export class StoreHost<T> {
         this.state = clone(options.defaults);
         this.middleware = middleware;
 
-        this.registerIpc();
         this.initPromise = this.init();
+        this.registerIpc();
     }
 
     /**
@@ -39,7 +39,6 @@ export class StoreHost<T> {
             console.error(`[StoreHost:${this.options.name}] Hydration failed, reverting to defaults.`, error);
             this.state = clone(this.options.defaults);
         }
-        this.broadcast();
     }
 
     /**
@@ -53,19 +52,45 @@ export class StoreHost<T> {
      * Updates the state with a partial object, runs validation, executes persistence middleware, and notifies renderers.
      */
     public async set(partial: DeepPartial<T> | T) {
-        await this.initPromise; // Ensure we don't write before initial hydration completes
+        await this.initPromise;
 
         const newState = deepMerge(this.state, partial);
+        await this.applyState(newState);
+    }
 
+    /**
+     * Updates a specific top-level key by replacing it entirely.
+     * Use this when you need to remove keys from an object by omitting them,
+     * rather than merging.
+     */
+    public async setKey<K extends keyof T>(key: K, value: T[K]) {
+        await this.initPromise;
+
+        const newState = clone(this.state);
+        newState[key] = value;
+        await this.applyState(newState);
+    }
+
+    private async applyState(newState: T) {
         if (this.options.validate) {
-            this.state = this.options.validate(newState); // Validation may throw, preventing the set
-        } else {
-            this.state = newState as T;
+            try {
+                newState = this.options.validate(newState);
+            } catch (err) {
+                // Validation failed, abort update
+                throw err;
+            }
         }
 
-        // execute persistence hooks in parallel
+        // Performance: Skip broadcast/persist if state effectively didn't change
+        if (JSON.stringify(this.state) === JSON.stringify(newState)) return;
+
+        this.state = newState;
+
+        // Execute persistence hooks (non-blocking for UI, but awaited for data safety)
         await Promise.all(
-            this.middleware.map(mw => mw.onPersist ? mw.onPersist(this.state) : Promise.resolve())
+            this.middleware.map(mw =>
+                mw.onPersist ? Promise.resolve(mw.onPersist(this.state)).catch(e => console.error(e)) : undefined
+            )
         );
 
         this.broadcast();
@@ -88,22 +113,26 @@ export class StoreHost<T> {
      */
     private registerIpc() {
         const { name } = this.options;
+        const bind = (channel: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => Promise<any>) => {
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, fn);
+        };
 
-        ipcMain.removeHandler(Channels.GET(name));
-        ipcMain.removeHandler(Channels.SET(name));
-        ipcMain.removeHandler(Channels.RESET(name));
-
-        ipcMain.handle(Channels.GET(name), async () => {
+        bind(Channels.GET(name), async () => {
             await this.initPromise;
             return this.get();
         });
 
-        ipcMain.handle(Channels.SET(name), async (_: IpcMainInvokeEvent, u: DeepPartial<T>) => {
+        bind(Channels.SET(name), async (_, u: DeepPartial<T>) => {
             await this.set(u);
         });
 
-        ipcMain.handle(Channels.RESET(name), async () => {
-            await this.set(this.options.defaults);
+        bind(Channels.SET_KEY(name), async (_, key: keyof T, val: any) => {
+            await this.setKey(key, val);
+        });
+
+        bind(Channels.RESET(name), async () => {
+            await this.applyState(clone(this.options.defaults));
         });
     }
 
