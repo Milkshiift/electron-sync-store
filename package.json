@@ -3,13 +3,10 @@
   "version": "1.0.0",
   "description": "Synchronize state between the Main and Preload processes.",
   "type": "module",
-  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.ts"
     },
     "./main": {
       "types": "./dist/main.d.ts",
