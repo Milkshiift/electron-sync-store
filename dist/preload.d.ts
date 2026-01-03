@@ -8,6 +8,7 @@ export declare class StoreClient<T> {
     private listeners;
     private options;
     private readyPromise;
+    private isHydrated;
     constructor(options: StoreOptions<T>);
     /**
      * Returns a promise that resolves with the state when the initial synchronization is complete.
@@ -29,6 +30,7 @@ export declare class StoreClient<T> {
      */
     subscribe(cb: Listener<T>): Unsubscribe;
     private notify;
+    private performOptimisticUpdate;
 }
 /**
  * Creates a new StoreClient instance in the Renderer process.

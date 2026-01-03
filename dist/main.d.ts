@@ -8,6 +8,7 @@ export declare class StoreHost<T> {
     private options;
     private middleware;
     private initPromise;
+    private persistenceQueue;
     constructor(options: StoreOptions<T>, middleware?: Middleware<T>[]);
     /**
      * Hydrates state from middleware (e.g., file system), validates it, and broadcasts readiness.
@@ -21,6 +22,13 @@ export declare class StoreHost<T> {
      * Updates the state with a partial object, runs validation, executes persistence middleware, and notifies renderers.
      */
     set(partial: DeepPartial<T> | T): Promise<void>;
+    /**
+     * Updates a specific top-level key by replacing it entirely.
+     * Use this when you need to remove keys from an object by omitting them,
+     * rather than merging.
+     */
+    setKey<K extends keyof T>(key: K, value: T[K]): Promise<void>;
+    private applyState;
     /**
      * Pushes the current state to all active browser windows.
      */
