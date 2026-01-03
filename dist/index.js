@@ -1,3 +1,0 @@
-function G(x){return x}function E(x){try{return structuredClone(x)}catch(z){return JSON.parse(JSON.stringify(x))}}function q(x){return x!==null&&typeof x==="object"&&!Array.isArray(x)&&!(x instanceof Date)&&!(x instanceof RegExp)}function F(x,z){if(z===void 0)return;if(!q(x)||!q(z))return E(z);let S={...x};for(let w of Object.keys(z)){if(w==="__proto__"||w==="constructor"||w==="prototype")continue;let h=z[w],B=S[w];if(h===void 0)delete S[w];else S[w]=F(B,h)}return S}var J={GET:(x)=>`store:${x}:get`,SET:(x)=>`store:${x}:set`,SET_KEY:(x)=>`store:${x}:set-key`,RESET:(x)=>`store:${x}:reset`,ON_CHANGE:(x)=>`store:${x}:changed`};export{q as isPlainObject,G as defineStore,F as deepMerge,E as clone,J as Channels};
-
-//# debugId=7EBF1F406C5C0E3E64756E2164756E21
