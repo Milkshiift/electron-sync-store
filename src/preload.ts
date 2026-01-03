@@ -37,7 +37,7 @@ export class StoreClient<T> {
             })
             .catch((err) => {
                 console.error(`[StoreClient] Init failed`, err);
-                return this.state;
+                throw err;
             });
     }
 
@@ -76,18 +76,20 @@ export class StoreClient<T> {
     }
 
     public async setKey<K extends keyof T>(key: K, value: T[K]): Promise<void> {
+        const safeValue = clone(value);
+
         if (!this.options.optimistic) {
-            await ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, value);
+            await ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, safeValue);
             return;
         }
 
         await this.performOptimisticUpdate(
             () => {
                 const s = clone(this.state);
-                s[key] = value;
+                s[key] = safeValue;
                 return s;
             },
-            () => ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, value)
+            () => ipcRenderer.invoke(Channels.SET_KEY(this.options.name), key, safeValue)
         );
     }
 

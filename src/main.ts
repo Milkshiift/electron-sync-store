@@ -12,6 +12,8 @@ export class StoreHost<T> {
     private middleware: Middleware<T>[];
     private initPromise: Promise<void>;
 
+    private persistenceQueue: Promise<void> = Promise.resolve();
+
     constructor(options: StoreOptions<T>, middleware: Middleware<T>[] = []) {
         this.options = options;
         this.state = clone(options.defaults);
@@ -25,19 +27,14 @@ export class StoreHost<T> {
      * Hydrates state from middleware (e.g., file system), validates it, and broadcasts readiness.
      */
     private async init() {
-        try {
-            for (const mw of this.middleware) {
-                if (mw.onHydrate) {
-                    const loaded = await mw.onHydrate();
-                    if (loaded) this.state = deepMerge(this.state, loaded);
-                }
+        for (const mw of this.middleware) {
+            if (mw.onHydrate) {
+                const loaded = await mw.onHydrate();
+                if (loaded) this.state = deepMerge(this.state, loaded);
             }
-            if (this.options.validate) {
-                this.state = this.options.validate(this.state);
-            }
-        } catch (error) {
-            console.error(`[StoreHost:${this.options.name}] Hydration failed, reverting to defaults.`, error);
-            this.state = clone(this.options.defaults);
+        }
+        if (this.options.validate) {
+            this.state = this.options.validate(this.state);
         }
     }
 
@@ -86,14 +83,16 @@ export class StoreHost<T> {
 
         this.state = newState;
 
-        // Execute persistence hooks (non-blocking for UI, but awaited for data safety)
-        await Promise.all(
-            this.middleware.map(mw =>
-                mw.onPersist ? Promise.resolve(mw.onPersist(this.state)).catch(e => console.error(e)) : undefined
-            )
-        );
-
         this.broadcast();
+
+        // Execute persistence hooks (non-blocking for UI, but awaited for data safety)
+        this.persistenceQueue = this.persistenceQueue
+            .then(() => Promise.all(
+                this.middleware.map(mw =>
+                    mw.onPersist ? Promise.resolve(mw.onPersist(this.state)).catch(e => console.error(e)) : undefined
+                )
+            ))
+            .then(() => {});
     }
 
     /**
@@ -115,11 +114,13 @@ export class StoreHost<T> {
         const { name } = this.options;
         const bind = (channel: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => Promise<any>) => {
             ipcMain.removeHandler(channel);
-            ipcMain.handle(channel, fn);
+            ipcMain.handle(channel, async (e, ...args) => {
+                await this.initPromise;
+                return fn(e, ...args);
+            });
         };
 
         bind(Channels.GET(name), async () => {
-            await this.initPromise;
             return this.get();
         });
 
