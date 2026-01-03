@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sources": ["../src/types.ts"],
+  "sourcesContent": [
+    "export interface Middleware<T> {\n    onHydrate?: () => T | Promise<T | null | undefined>;\n    onPersist?: (state: Readonly<T>) => void | Promise<void>;\n}\n\nexport type Listener<T> = (state: Readonly<T>) => void;\nexport type Unsubscribe = () => void;\n\n/** @internal */\nexport const Channels = {\n    GET: (name: string) => `store:${name}:get`,\n    SET: (name: string) => `store:${name}:set`,\n    ON_CHANGE: (name: string) => `store:${name}:changed`,\n};"
+  ],
+  "mappings": "AASO,IAAM,EAAW,CACpB,IAAK,CAAC,IAAiB,SAAS,QAChC,IAAK,CAAC,IAAiB,SAAS,QAChC,UAAW,CAAC,IAAiB,SAAS,WAC1C",
+  "debugId": "C146195365E0691C64756E2164756E21",
+  "names": []
+}
