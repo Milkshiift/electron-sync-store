@@ -68,8 +68,9 @@ export class StoreHost<T> {
     private persist(): void {
         this.writeLock = this.writeLock.then(async () => {
             if (!this.state) return;
+            const stateSnapshot = structuredClone(this.state); // Defensive copying
             await Promise.all(
-                this.middleware.map(mw => mw.onPersist?.(this.state!))
+                this.middleware.map(mw => mw.onPersist?.(stateSnapshot))
             );
         }).catch(err => console.error(`[StoreHost] Persist error in ${this.name}:`, err));
     }
