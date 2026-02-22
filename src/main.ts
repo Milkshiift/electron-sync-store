@@ -1,6 +1,16 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { Channels, type Middleware } from "./types";
 
+export interface SetOptions {
+    /**
+     * Whether to trigger the onPersist middleware.
+     * If false, the state is updated in memory and broadcast to renderers,
+     * but not saved via middleware.
+     * @default true
+     */
+    persist?: boolean;
+}
+
 export class StoreHost<T> {
     private state: T | undefined;
     private initPromise: Promise<void>;
@@ -35,12 +45,15 @@ export class StoreHost<T> {
         return this.state;
     }
 
-    public async set(value: T): Promise<void> {
+    public async set(value: T, options: SetOptions = {}): Promise<void> {
         await this.initPromise;
         this.state = structuredClone(value);
 
         this.broadcast();
-        this.persist();
+
+        if (options.persist !== false) {
+            this.persist();
+        }
     }
 
     private broadcast(): void {
